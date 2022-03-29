@@ -181,13 +181,17 @@ services:
       - ./config/redis-sentinel:/usr/local/etc/redis
 ~~~
 
+## 架构文档
+
+![redis主从复制](D:\workspace\redis-demo\assert\redis主从复制.png)
+
+![redis哨兵模式](D:\workspace\redis-demo\assert\redis哨兵模式.png)
+
 ## Hello  World实战
 
 ## 学习原理
 
 ## 场景实战
-
-## 整理文档
 
 ## repeat
 
