@@ -14,7 +14,7 @@ public class ConnectionManagerTest {
     @Before
     public void connect() {
         log.info("Connecting to Redis");
-        jedis = new Jedis("node1", 6000);
+        jedis = new Jedis("node1", 6001);
     }
 
     @After

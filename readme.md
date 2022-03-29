@@ -141,6 +141,46 @@ services:
       - ./data/master:/data
 ~~~
 
+2. 哨兵模式
+
+~~~shell
+# 以主从复制模式开启redis
+# 编写哨兵配置文件，创建文件夹
+$ mkdir -p config/redis-sentinel
+$ vim sentinel.conf
+
+port 26379
+daemonize no
+pidfile "/var/run/redis-sentinel.pid"
+logfile "sentinel-log"
+dir "/tmp"
+sentinel monitor mymaster 192.168.113.130 6001 2
+~~~
+
+编写docker-compose.yml
+
+~~~yaml
+# 编写docker-compose.yml
+services:
+  master-sentinel:
+    image: redis
+    container_name: master-sentinel
+    restart: always
+    command: redis-server --port 6001 --appendonly yes
+    ports:
+      - 6001:6001
+    volumes:
+      - ./data/master:/data
+  redis-sentinel:
+    image: redis
+    container_name: redis-sentinel
+    ports:
+      - 26379:26379
+    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    volumes:
+      - ./config/redis-sentinel:/usr/local/etc/redis
+~~~
+
 ## Hello  World实战
 
 ## 学习原理
