@@ -183,9 +183,9 @@ services:
 
 ## 架构文档
 
-![redis主从复制](.\assert\redis主从复制.png)
+![redis主从复制](./assert/redis主从复制.png)
 
-![redis哨兵模式](.\assert\redis哨兵模式.png)
+![redis哨兵模式](./assert/redis哨兵模式.png)
 
 ## Hello  World实战
 
