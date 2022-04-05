@@ -547,7 +547,7 @@ Redis 4.0 中提出了一个混合使用 AOF 日志和内存快照的方法。
 
 [redis容量预估网站]( http://www.redis.cn/redis_memory/)
 
-[中文配置文件](redis文档 v2.assets/redis-cn.conf)
+[中文配置文件](doc/redis-cn.conf)
 
 [中文配置文件 web](https://blog.csdn.net/u010440155/article/details/53079942)
 
@@ -557,7 +557,7 @@ Redis 4.0 中提出了一个混合使用 AOF 日志和内存快照的方法。
 
 [《Redis 使用手册》]()
 
-[《Redis 设计与实现》](redis文档 v2.assets/redis设计与实现（第二版）.pdf)
+[《Redis 设计与实现》](doc/redis设计与实现（第二版）.pdf)
 
-[《Redis 开发与运维》](redis文档 v2.assets/Redis开发与运维.pdf)
+[《Redis 开发与运维》](doc/Redis开发与运维.pdf)
 
