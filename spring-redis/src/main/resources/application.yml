@@ -1,0 +1,5 @@
+spring:
+  redis:
+    host: node1
+    port: 6001
+    database: 0
