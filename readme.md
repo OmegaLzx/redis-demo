@@ -1,7 +1,3 @@
----
-typora-copy-images-to: assert
----
-
 # Redis文档
 
 ## 了解基本概念
