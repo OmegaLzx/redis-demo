@@ -13,6 +13,10 @@ public class UserHolder {
         return tl.get();
     }
 
+    public static String getToken() {
+        return tl.get().getToken();
+    }
+
     public static void removeUser() {
         tl.remove();
     }
