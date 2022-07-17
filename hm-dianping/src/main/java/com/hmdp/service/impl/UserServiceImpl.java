@@ -57,13 +57,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     @Override
     public Result validateCode(LoginFormDTO loginFormDTO) {
-        // 1. 检查验证码有效性
-        String code = stringRedisTemplate.opsForValue()
-                .get(redisConstant.getLoginCodePrefix() + loginFormDTO.getPhone());
-        // 2. 验证码无效，返回错误信息
-        if (code == null || !code.equals(loginFormDTO.getCode())) {
-            return Result.fail("验证码无效");
-        }
+//        if (!validCode(loginFormDTO)) {
+//            return Result.fail("验证码无效");
+//        }
+
         // 3. 验证码有效
         // 3.1 检查用户是否存在
         User user = this.getOne(new QueryWrapper<User>().eq("phone", loginFormDTO.getPhone()));
@@ -87,6 +84,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         stringRedisTemplate.expire(tokenKey, redisConstant.getUserInfoTtl(), TimeUnit.MINUTES);
         // 4. 返回token
         return Result.ok(token);
+    }
+
+    private boolean validCode(LoginFormDTO loginFormDTO) {
+        // 1. 检查验证码有效性
+        String code = stringRedisTemplate.opsForValue()
+                .get(redisConstant.getLoginCodePrefix() + loginFormDTO.getPhone());
+        // 2. 验证码无效，返回错误信息
+        return code != null && code.equals(loginFormDTO.getCode());
     }
 
     @Override
