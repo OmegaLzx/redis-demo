@@ -1,7 +1,6 @@
 package com.hmdp.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -13,6 +12,7 @@ import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
+import com.hmdp.utils.RedisHashUtil;
 import com.hmdp.utils.RegexUtils;
 import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
@@ -20,9 +20,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -38,6 +35,8 @@ import java.util.concurrent.TimeUnit;
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+    @Resource
+    private RedisHashUtil redisHashUtil;
     @Resource
     private RedisConstantConfig redisConstant;
 
@@ -74,14 +73,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 3.3 用户存在，查询用户信息，并存入redis
         String token = UUID.randomUUID().toString(true);
         String tokenKey = redisConstant.getUserInfoPrefix() + token;
-        Map<String, Object> userMap = BeanUtil.beanToMap(userDTO, new HashMap<>(), CopyOptions.create()
-                .setIgnoreNullValue(true)
-                .setIgnoreError(false)
-                .setFieldValueEditor((field, value) -> Optional.ofNullable(value).map(Object::toString).orElse(null)));
 
-        userMap.put("token", token);
-        stringRedisTemplate.opsForHash().putAll(tokenKey, userMap);
-        stringRedisTemplate.expire(tokenKey, redisConstant.getUserInfoTtl(), TimeUnit.MINUTES);
+        redisHashUtil.save2Redis(tokenKey, "token", token);
+        redisHashUtil.save2Redis(tokenKey, userDTO, redisConstant.getUserInfoTtl(), TimeUnit.MINUTES, true);
         // 4. 返回token
         return Result.ok(token);
     }
