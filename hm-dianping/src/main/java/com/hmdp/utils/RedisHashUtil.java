@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
@@ -80,30 +82,16 @@ public class RedisHashUtil {
     }
 
 
+    private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
+
     /**
      * 以逻辑过期时间存储到redis
      */
-    public <T, R> RedisData save2RedisWithLogicalExpire(String prefix, T id, Long expireTime, TimeUnit unit, boolean saveNull, Function<T, R> function) {
+    public <T, R> RedisData<R> save2RedisWithLogicalExpire(String prefix, T id, Long expireTime, TimeUnit unit, boolean saveNull, Function<T, R> function) {
         R r = save2Redis(prefix, id, saveNull, function);
         LocalDateTime localDateTime = LocalDateTime.now().plusSeconds(unit.toSeconds(expireTime));
         save2Redis(prefix + id, EXPIRE_TIME_KEY, localDateTime.toString());
-        return new RedisData(r, localDateTime);
-    }
-
-    public <T> RedisData getRedisData(Class<T> clazz, String key) {
-        Map<Object, Object> map = redisTemplate.opsForHash().entries(key);
-        T data = null;
-        try {
-            data = BeanUtil.fillBeanWithMap(map, clazz.newInstance(), false);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        Object expireObj = redisTemplate.opsForHash().get(key, EXPIRE_TIME_KEY);
-        if (expireObj == null) {
-            throw new RuntimeException();
-        }
-        LocalDateTime expireTime = LocalDateTime.parse((String) expireObj);
-        return new RedisData(data, expireTime);
+        return new RedisData<>(r, localDateTime);
     }
 
 
@@ -135,5 +123,115 @@ public class RedisHashUtil {
 
     public void expire(String key, Long expireTime, TimeUnit unit) {
         redisTemplate.expire(key, expireTime, unit);
+    }
+
+    public <T> RedisData<T> getRedisData(Class<T> clazz, String key) {
+        Map<Object, Object> map = redisTemplate.opsForHash().entries(key);
+        T data;
+        try {
+            data = BeanUtil.fillBeanWithMap(map, clazz.newInstance(), false);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        Object expireObj = redisTemplate.opsForHash().get(key, EXPIRE_TIME_KEY);
+        if (expireObj == null) {
+            throw new RuntimeException();
+        }
+        LocalDateTime expireTime = LocalDateTime.parse((String) expireObj);
+        return new RedisData<>(data, expireTime);
+    }
+
+    public <T, R> R queryWithPassThrough(String prefix, T id, Class<R> clazz, Long expireTime, TimeUnit unit, Function<T, R> function) {
+        String cacheKey = prefix + id;
+        // 1. 从redis中查询缓存
+        Map<Object, Object> map = redisTemplate.opsForHash().entries(cacheKey);
+        // 2. 判断是否存在
+        if (!map.isEmpty()) {
+            if (map.get(NULL_VALUE) != null) {
+                return null;
+            }
+            try {
+                return BeanUtil.fillBeanWithMap(map, clazz.newInstance(), false);
+            } catch (Exception e) {
+                log.error("", e);
+            }
+        }
+        return save2Redis(prefix, id, expireTime, unit, true, function);
+    }
+
+    public <T, R> R queryWithMutex(String prefix, T id, Class<R> clazz, String lockPrefix, Long expireTime, TimeUnit unit, Function<T, R> function) {
+        String cacheKey = prefix + id;
+        // 1. 从redis中查询缓存
+        Map<Object, Object> map = redisTemplate.opsForHash().entries(cacheKey);
+        // 2. 判断是否存在
+        if (!map.isEmpty()) {
+            if (map.get(NULL_VALUE) != null) {
+                return null;
+            }
+            try {
+                return BeanUtil.fillBeanWithMap(map, clazz.newInstance(), false);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+        // 获取互斥锁
+        String lockKey = lockPrefix + id;
+        try {
+            // 判断是否获取成功
+            if (!tryLock(lockKey)) {
+                // 失败，则休眠并重试
+                Thread.sleep(10);
+                return queryWithMutex(prefix, id, clazz, lockPrefix, expireTime, unit, function);
+            }
+            // 3 实现缓存重建
+            return save2Redis(prefix, id, expireTime, unit, true, function);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            // 释放互斥锁
+            unlock(lockKey);
+        }
+    }
+
+    public <T, R> R queryWithLogicalExpire(String prefix, T id, Class<R> clazz, String lockPrefix, Long expireTime,
+                                           TimeUnit unit, Function<T, R> function) {
+        String cacheKey = prefix + id;
+        // 1. 从redis中查询缓存
+        Map<Object, Object> map = redisTemplate.opsForHash().entries(cacheKey);
+        // 2. 判断是否存在
+        if (map.isEmpty()) {
+            return null;
+        }
+        // 缓存命中，先反序列化为对象
+        RedisData<R> redisData = getRedisData(clazz, cacheKey);
+        R r = redisData.getData();
+        LocalDateTime localDateTime = redisData.getExpireTime();
+        // 判断是否过期
+        if (localDateTime.isAfter(LocalDateTime.now())) {
+            // 未过期，直接返回店铺信息
+            return r;
+        }
+        // 已过期，需要缓存重建
+        // 获取互斥锁
+        // 判断是否获取锁成功
+        if (tryLock(lockPrefix + id)) {
+            // 成功执行缓存重建
+            // 双重检查
+            redisData = getRedisData(clazz, cacheKey);
+            if (redisData.getExpireTime().isBefore(LocalDateTime.now())) {
+                CACHE_REBUILD_EXECUTOR.submit(() -> {
+                            try {
+                                save2RedisWithLogicalExpire(prefix, id, expireTime,
+                                        unit, true, function);
+                            } catch (Exception e) {
+                                log.error("", e);
+                            } finally {
+                                unlock(lockPrefix + id);
+                            }
+                        }
+                );
+            }
+        }
+        return r;
     }
 }
