@@ -22,6 +22,7 @@ import java.util.function.Function;
 public class RedisHashUtil {
     private final StringRedisTemplate redisTemplate;
     public static final String NULL_VALUE = "nil";
+    public static final String EXPIRE_TIME_KEY = "expireTime";
 
     /**
      * 尝试加锁
@@ -85,8 +86,24 @@ public class RedisHashUtil {
     public <T, R> RedisData save2RedisWithLogicalExpire(String prefix, T id, Long expireTime, TimeUnit unit, boolean saveNull, Function<T, R> function) {
         R r = save2Redis(prefix, id, saveNull, function);
         LocalDateTime localDateTime = LocalDateTime.now().plusSeconds(unit.toSeconds(expireTime));
-        save2Redis(prefix + id, "expireTime", localDateTime.toString());
+        save2Redis(prefix + id, EXPIRE_TIME_KEY, localDateTime.toString());
         return new RedisData(r, localDateTime);
+    }
+
+    public <T> RedisData getRedisData(Class<T> clazz, String key) {
+        Map<Object, Object> map = redisTemplate.opsForHash().entries(key);
+        T data = null;
+        try {
+            data = BeanUtil.fillBeanWithMap(map, clazz.newInstance(), false);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        Object expireObj = redisTemplate.opsForHash().get(key, EXPIRE_TIME_KEY);
+        if (expireObj == null) {
+            throw new RuntimeException();
+        }
+        LocalDateTime expireTime = LocalDateTime.parse((String) expireObj);
+        return new RedisData(data, expireTime);
     }
 
 

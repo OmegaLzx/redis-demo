@@ -6,6 +6,7 @@ import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
+import com.hmdp.utils.RedisData;
 import com.hmdp.utils.RedisHashUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +14,10 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static com.hmdp.constant.RedisConstants.*;
@@ -34,21 +38,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     private final StringRedisTemplate redisTemplate;
     private final RedisHashUtil redisHashUtil;
 
-    @Override
-    public Result queryById(Long id) {
-        // 解决缓存穿透
-        // Shop shop = queryWithPassThrough(id);
-
-        // 互斥锁解决缓存击穿
-        Shop shop = queryWithMutex(id);
-
-        // 逻辑过期解决缓存击穿
-//        Shop shop = queryWithLogicalExpire(id);
-        if (shop == null) {
-            return Result.fail("店铺不存在");
-        }
-        return Result.ok(shop);
-    }
+    private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
 
     public Shop queryWithPassThrough(Long id) {
         String cacheKey = CACHE_SHOP_KEY + id;
@@ -95,6 +85,21 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         }
     }
 
+    @Override
+    public Result queryById(Long id) {
+        // 解决缓存穿透
+        // Shop shop = queryWithPassThrough(id);
+
+        // 互斥锁解决缓存击穿
+//        Shop shop = queryWithMutex(id);
+
+        // 逻辑过期解决缓存击穿
+        Shop shop = queryWithLogicalExpire(id);
+        if (shop == null) {
+            return Result.fail("店铺不存在");
+        }
+        return Result.ok(shop);
+    }
 
     public Shop queryWithLogicalExpire(Long id) {
         String cacheKey = CACHE_SHOP_KEY + id;
@@ -104,11 +109,36 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         if (shopMap.isEmpty()) {
             return null;
         }
-
-        Shop shop = getById(id);
-        // 3.2 存在写回redis，返回数据
-
-        redisHashUtil.save2Redis(cacheKey, shop, CACHE_SHOP_TTL, TimeUnit.MINUTES, true);
+        // 缓存命中，先反序列化为对象
+        RedisData redisData = redisHashUtil.getRedisData(Shop.class, cacheKey);
+        Shop shop = (Shop) redisData.getData();
+        LocalDateTime expireTime = redisData.getExpireTime();
+        // 判断是否过期
+        if (expireTime.isAfter(LocalDateTime.now())) {
+            // 未过期，直接返回店铺信息
+            return shop;
+        }
+        // 已过期，需要缓存重建
+        // 获取互斥锁
+        // 判断是否获取锁成功
+        if (redisHashUtil.tryLock(LOCK_SHOP_KEY + id)) {
+            // 成功执行缓存重建
+            // 双重检查
+            redisData = redisHashUtil.getRedisData(Shop.class, cacheKey);
+            if (redisData.getExpireTime().isBefore(LocalDateTime.now())) {
+                CACHE_REBUILD_EXECUTOR.submit(() -> {
+                            try {
+                                redisHashUtil.save2RedisWithLogicalExpire(CACHE_SHOP_KEY, id, CACHE_SHOP_TTL,
+                                        TimeUnit.MINUTES, true, this::getById);
+                            } catch (Exception e) {
+                                log.error("", e);
+                            } finally {
+                                redisHashUtil.unlock(LOCK_SHOP_KEY + id);
+                            }
+                        }
+                );
+            }
+        }
         return shop;
     }
 
