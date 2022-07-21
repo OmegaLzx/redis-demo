@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
 import java.io.Serializable;
@@ -22,7 +23,13 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
 @TableName("tb_voucher_order")
+@NoArgsConstructor
 public class VoucherOrder implements Serializable {
+    public VoucherOrder(Long id, Long userId, Long voucherId) {
+        this.id = id;
+        this.userId = userId;
+        this.voucherId = voucherId;
+    }
 
     private static final long serialVersionUID = 1L;
 

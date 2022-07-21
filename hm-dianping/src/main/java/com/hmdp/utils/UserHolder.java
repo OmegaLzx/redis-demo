@@ -13,6 +13,10 @@ public class UserHolder {
         return tl.get();
     }
 
+    public static Long getUserId() {
+        return getUser().getId();
+    }
+
     public static String getToken() {
         return tl.get().getToken();
     }
