@@ -50,15 +50,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         String code = RandomUtil.randomNumbers(6);
         log.info("发送手机验证码：{}", code);
         // 将验证码保存在redis中
-        stringRedisTemplate.opsForValue().set(redisConstant.getLoginCodePrefix() + phone, code, redisConstant.getLoginCodeTtl(), TimeUnit.MINUTES);
+        stringRedisTemplate.opsForValue().set(
+                redisConstant.getLoginCodePrefix() + phone, code, redisConstant.getLoginCodeTtl(), TimeUnit.MINUTES);
         return Result.ok();
     }
 
     @Override
     public Result validateCode(LoginFormDTO loginFormDTO) {
-//        if (!validCode(loginFormDTO)) {
-//            return Result.fail("验证码无效");
-//        }
+        //        if (!validCode(loginFormDTO)) {
+        //            return Result.fail("验证码无效");
+        //        }
 
         // 3. 验证码有效
         // 3.1 检查用户是否存在
@@ -75,15 +76,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         String tokenKey = redisConstant.getUserInfoPrefix() + token;
 
         redisHashUtil.save2Redis(tokenKey, "token", token);
-        redisHashUtil.save2Redis(tokenKey, userDTO, redisConstant.getUserInfoTtl(), TimeUnit.MINUTES, true);
+        redisHashUtil.save2Redis(tokenKey, userDTO, true);
         // 4. 返回token
         return Result.ok(token);
     }
 
     private boolean validCode(LoginFormDTO loginFormDTO) {
         // 1. 检查验证码有效性
-        String code = stringRedisTemplate.opsForValue()
-                .get(redisConstant.getLoginCodePrefix() + loginFormDTO.getPhone());
+        String code = stringRedisTemplate.opsForValue().get(
+                redisConstant.getLoginCodePrefix() + loginFormDTO.getPhone());
         // 2. 验证码无效，返回错误信息
         return code != null && code.equals(loginFormDTO.getCode());
     }

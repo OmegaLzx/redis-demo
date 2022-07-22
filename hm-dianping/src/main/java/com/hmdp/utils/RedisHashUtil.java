@@ -22,9 +22,10 @@ import java.util.function.Function;
 @RequiredArgsConstructor
 @Slf4j
 public class RedisHashUtil {
-    private final StringRedisTemplate redisTemplate;
     public static final String NULL_VALUE = "nil";
     public static final String EXPIRE_TIME_KEY = "expireTime";
+    private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
+    private final StringRedisTemplate redisTemplate;
 
     /**
      * 尝试加锁
@@ -72,7 +73,6 @@ public class RedisHashUtil {
         return r;
     }
 
-
     /**
      * 存储到redis key-key'-value
      * 不设置过期时间
@@ -80,9 +80,6 @@ public class RedisHashUtil {
     public void save2Redis(String key, String key1, String value) {
         redisTemplate.opsForHash().put(key, key1, value);
     }
-
-
-    private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
 
     /**
      * 以逻辑过期时间存储到redis
@@ -220,15 +217,16 @@ public class RedisHashUtil {
             redisData = getRedisData(clazz, cacheKey);
             if (redisData.getExpireTime().isBefore(LocalDateTime.now())) {
                 CACHE_REBUILD_EXECUTOR.submit(() -> {
-                            try {
-                                save2RedisWithLogicalExpire(prefix, id, expireTime,
-                                        unit, true, function);
-                            } catch (Exception e) {
-                                log.error("", e);
-                            } finally {
-                                unlock(lockPrefix + id);
-                            }
-                        }
+                                                  try {
+                                                      save2RedisWithLogicalExpire(prefix, id, expireTime,
+                                                                                  unit, true, function
+                                                      );
+                                                  } catch (Exception e) {
+                                                      log.error("", e);
+                                                  } finally {
+                                                      unlock(lockPrefix + id);
+                                                  }
+                                              }
                 );
             }
         }

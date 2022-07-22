@@ -25,3 +25,6 @@ mybatis-plus:
 logging:
   level:
     com.hmdp: debug
+me:
+  redisson:
+    address: ${spring.redis.host}:${spring.redis.port}

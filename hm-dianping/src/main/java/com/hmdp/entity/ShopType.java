@@ -52,7 +52,7 @@ public class ShopType implements Serializable {
      * 创建时间
      */
     @JsonIgnore
-//    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    //    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;
 
     /**

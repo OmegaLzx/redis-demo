@@ -22,6 +22,7 @@ public class ShopServiceImplTest {
     @Test
     public void saveShop2Redis() {
         redisHashUtil.save2RedisWithLogicalExpire(CACHE_SHOP_KEY, 3L, 2L, TimeUnit.HOURS,
-                true, id -> shopService.getById(id));
+                                                  true, id -> shopService.getById(id)
+        );
     }
 }

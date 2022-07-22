@@ -30,17 +30,18 @@ import static com.hmdp.constant.RedisConstants.*;
 @Service
 @RequiredArgsConstructor
 public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IShopService {
+    private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
     private final StringRedisTemplate redisTemplate;
     private final RedisHashUtil redisHashUtil;
 
-    private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
-
     public Shop queryWithPassThrough(Long id) {
-        return redisHashUtil.queryWithPassThrough(CACHE_SHOP_KEY, id, Shop.class, CACHE_SHOP_TTL, TimeUnit.MINUTES, this::getById);
+        return redisHashUtil.queryWithPassThrough(
+                CACHE_SHOP_KEY, id, Shop.class, CACHE_SHOP_TTL, TimeUnit.MINUTES, this::getById);
     }
 
     public Shop queryWithMutex(Long id) {
-        return redisHashUtil.queryWithMutex(CACHE_SHOP_KEY, id, Shop.class, LOCK_SHOP_KEY, CACHE_SHOP_TTL, TimeUnit.MINUTES, this::getById);
+        return redisHashUtil.queryWithMutex(
+                CACHE_SHOP_KEY, id, Shop.class, LOCK_SHOP_KEY, CACHE_SHOP_TTL, TimeUnit.MINUTES, this::getById);
     }
 
     @Override
@@ -49,10 +50,10 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         Shop shop = queryWithPassThrough(id);
 
         // 互斥锁解决缓存击穿
-//        Shop shop = queryWithMutex(id);
+        // Shop shop = queryWithMutex(id);
 
         // 逻辑过期解决缓存击穿
-//        Shop shop = queryWithLogicalExpire(id);
+        // Shop shop = queryWithLogicalExpire(id);
         if (shop == null) {
             return Result.fail("店铺不存在");
         }
@@ -60,7 +61,8 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     }
 
     public Shop queryWithLogicalExpire(Long id) {
-        return redisHashUtil.queryWithLogicalExpire(CACHE_SHOP_KEY, id, Shop.class, LOCK_SHOP_KEY, CACHE_SHOP_TTL, TimeUnit.MINUTES, this::getById);
+        return redisHashUtil.queryWithLogicalExpire(
+                CACHE_SHOP_KEY, id, Shop.class, LOCK_SHOP_KEY, CACHE_SHOP_TTL, TimeUnit.MINUTES, this::getById);
     }
 
     @Override

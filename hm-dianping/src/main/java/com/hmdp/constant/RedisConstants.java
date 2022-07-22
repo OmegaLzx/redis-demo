@@ -1,6 +1,11 @@
 package com.hmdp.constant;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class RedisConstants {
+    public static final String SCRIPT_PATH = "script/";
+
     public static final String LOGIN_CODE_KEY = "login:code:";
     public static final Long LOGIN_CODE_TTL = 2L;
     public static final String LOGIN_USER_KEY = "login:token:";
@@ -19,4 +24,8 @@ public class RedisConstants {
     public static final String FEED_KEY = "feed:";
     public static final String SHOP_GEO_KEY = "shop:geo:";
     public static final String USER_SIGN_KEY = "sign:";
+
+    private RedisConstants() {
+    }
+
 }
