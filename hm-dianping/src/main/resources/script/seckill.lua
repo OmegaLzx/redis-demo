@@ -3,6 +3,7 @@
 local voucherId = ARGV[1]
 -- 用户id
 local userId = ARGV[2]
+local timestamp = ARGV[3]
 
 -- key
 -- 库存key
@@ -10,8 +11,18 @@ local stockKey = 'seckill:stock:' .. voucherId
 -- 订单key
 local orderKey = 'seckill:order:' .. voucherId
 
+
+-- 获取开始时间
+local beginTimestamp = redis.call('HGET', stockKey, 'beginTimestamp')
+-- nil在lua中用false标识
+if not beginTimestamp or tonumber(timestamp) - tonumber(beginTimestamp) < 0 then
+    redis.log(redis.LOG_WARNING, timestamp)
+    -- 活动未开始
+    return 3
+end
+
 -- 判断库存是否充足
-if tonumber(redis.call('GET', stockKey)) <= 0 then
+if tonumber(redis.call('HGET', stockKey, 'stock')) <= 0 then
     -- 库存不足，返回1
     return 1
 end
@@ -22,7 +33,7 @@ if redis.call('SISMEMBER', orderKey, userId) == 1 then
 end
 
 -- 扣减库存
-redis.call('INCRBY', stockKey, -1)
+redis.call('HINCRBY', stockKey, 'stock', -1)
 -- 保存用户下单
 redis.call('SADD', orderKey, userId)
 return 0

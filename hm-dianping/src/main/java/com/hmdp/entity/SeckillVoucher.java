@@ -1,6 +1,7 @@
 package com.hmdp.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -46,6 +47,9 @@ public class SeckillVoucher implements Serializable {
      * 生效时间
      */
     private LocalDateTime beginTime;
+
+    @TableField(exist = false)
+    private String beginTimestamp;
 
     /**
      * 失效时间

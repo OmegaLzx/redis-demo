@@ -15,9 +15,12 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Collections;
 
 import static com.hmdp.constant.RedisScriptConstant.SECKILL_SCRIPT;
+import static com.hmdp.service.impl.VoucherOrderTask.ORDER_TASK;
 
 
 /**
@@ -39,20 +42,59 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @Override
     public Result seckillVoucher(Long voucherId) {
+        Long userId = UserHolder.getUserId();
         Long result = redisTemplate.execute(
                 RedisScriptConstant.get(SECKILL_SCRIPT),
                 Collections.emptyList(),
                 voucherId.toString(),
-                UserHolder.getUserId().toString()
+                userId.toString(),
+                String.valueOf(LocalDateTime.now().toEpochSecond(ZoneOffset.UTC))
         );
         assert result != null;
         int r = result.intValue();
-        if (r != 0) {
-            return Result.fail(r == 1 ? "库存不足" : "不能重复下单");
+        if (r == 1) {
+            return Result.fail("库存不足");
+        } else if (r == 2) {
+            return Result.fail("不能重复下单");
+        } else if (r == 3) {
+            return Result.fail("活动尚未开始");
         }
+        VoucherOrder voucherOrder = new VoucherOrder();
         long orderId = redisIdWorker.nextId("order");
-        // todo 保存阻塞队列
+        voucherOrder.setId(orderId);
+        voucherOrder.setUserId(userId);
+        voucherOrder.setVoucherId(voucherId);
+        // 保存阻塞队列
+        ORDER_TASK.add(voucherOrder);
         return Result.ok(orderId);
+    }
+
+
+    @Transactional
+    @Override
+    public void createVoucherOrder(VoucherOrder voucherOrder) {
+        Long userId = voucherOrder.getUserId();
+        Long voucherId = voucherOrder.getVoucherId();
+
+        int count = query()
+                .eq("user_id", userId)
+                .eq("voucher_id", voucherId)
+                .count();
+        if (count > 0) {
+            // 用户已经购买该优惠券
+            log.error("用户已经购买过一次！");
+            return;
+        }
+
+        // 5. 扣减库存
+        if (!seckillVoucherService.update()
+                .setSql("stock = stock - 1").gt("stock", 0)
+                .eq("voucher_id", voucherId).update()) {
+            log.error("库存不足");
+            return;
+        }
+        // 6. 创建订单
+        save(voucherOrder);
     }
 
     //@Override
@@ -84,27 +126,4 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     //        lock.unlock();
     //    }
     //}
-
-    @Transactional
-    @Override
-    public Result createVoucherOrder(Long voucherId) {
-        Long userId = UserHolder.getUserId();
-        int count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
-        if (count > 0) {
-            // 用户已经购买该优惠券
-            return Result.fail("用户已经购买过一次！");
-        }
-
-        // 5. 扣减库存
-        if (!seckillVoucherService.update().setSql("stock = stock - 1").gt("stock", 0).eq(
-                "voucher_id", voucherId).update()) {
-            return Result.fail("库存不足！");
-        }
-        // 6. 创建订单
-        long orderId = redisIdWorker.nextId("order");
-        VoucherOrder voucherOrder = new VoucherOrder(orderId, userId, voucherId);
-        save(voucherOrder);
-        // 7. 返回订单id
-        return Result.ok(orderId);
-    }
 }

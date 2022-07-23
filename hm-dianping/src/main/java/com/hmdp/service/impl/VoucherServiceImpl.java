@@ -7,12 +7,16 @@ import com.hmdp.entity.Voucher;
 import com.hmdp.mapper.VoucherMapper;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherService;
+import com.hmdp.utils.RedisHashUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static com.hmdp.constant.RedisConstants.SECKILL_STOCK_KEY;
 
@@ -30,6 +34,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
 
     private final ISeckillVoucherService seckillVoucherService;
     private final StringRedisTemplate redisTemplate;
+    private final RedisHashUtil redisHashUtil;
 
     @Override
     public Result queryVoucherOfShop(Long shopId) {
@@ -49,8 +54,22 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         seckillVoucher.setVoucherId(voucher.getId());
         seckillVoucher.setStock(voucher.getStock());
         seckillVoucher.setBeginTime(voucher.getBeginTime());
+        seckillVoucher.setBeginTimestamp(String.valueOf(voucher.getBeginTime().toEpochSecond(ZoneOffset.UTC)));
         seckillVoucher.setEndTime(voucher.getEndTime());
         seckillVoucherService.save(seckillVoucher);
-        redisTemplate.opsForValue().set(SECKILL_STOCK_KEY + voucher.getId(), voucher.getStock().toString());
+
+        long endSecond = seckillVoucher.getEndTime().toEpochSecond(ZoneOffset.UTC);
+        LocalDateTime now = LocalDateTime.now();
+        long nowSecond = now.toEpochSecond(ZoneOffset.UTC);
+        long timestamp = endSecond - nowSecond;
+
+        redisHashUtil.save2Redis(
+                SECKILL_STOCK_KEY + voucher.getId(),
+                seckillVoucher,
+                timestamp,
+                TimeUnit.SECONDS,
+                true
+        );
+
     }
 }
