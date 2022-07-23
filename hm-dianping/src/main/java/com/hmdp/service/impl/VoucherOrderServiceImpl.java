@@ -20,7 +20,6 @@ import java.time.ZoneOffset;
 import java.util.Collections;
 
 import static com.hmdp.constant.RedisScriptConstant.SECKILL_SCRIPT;
-import static com.hmdp.service.impl.VoucherOrderTask.ORDER_TASK;
 
 
 /**
@@ -42,14 +41,18 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @Override
     public Result seckillVoucher(Long voucherId) {
+        long orderId = redisIdWorker.nextId("order");
         Long userId = UserHolder.getUserId();
+        // 执行lua秒杀脚本
         Long result = redisTemplate.execute(
                 RedisScriptConstant.get(SECKILL_SCRIPT),
                 Collections.emptyList(),
                 voucherId.toString(),
                 userId.toString(),
-                String.valueOf(LocalDateTime.now().toEpochSecond(ZoneOffset.UTC))
+                String.valueOf(LocalDateTime.now().toEpochSecond(ZoneOffset.UTC)),
+                String.valueOf(orderId)
         );
+
         assert result != null;
         int r = result.intValue();
         if (r == 1) {
@@ -59,13 +62,6 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         } else if (r == 3) {
             return Result.fail("活动尚未开始");
         }
-        VoucherOrder voucherOrder = new VoucherOrder();
-        long orderId = redisIdWorker.nextId("order");
-        voucherOrder.setId(orderId);
-        voucherOrder.setUserId(userId);
-        voucherOrder.setVoucherId(voucherId);
-        // 保存阻塞队列
-        ORDER_TASK.add(voucherOrder);
         return Result.ok(orderId);
     }
 

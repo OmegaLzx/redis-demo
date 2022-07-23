@@ -20,4 +20,5 @@ public class RedisConstantConfig {
 
     @Value("${me.redis.userInfoTtl:30}")
     private Long userInfoTtl;
+    private String streamClient;
 }

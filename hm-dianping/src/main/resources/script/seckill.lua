@@ -3,7 +3,10 @@
 local voucherId = ARGV[1]
 -- 用户id
 local userId = ARGV[2]
+-- 当前时间
 local timestamp = ARGV[3]
+-- 订单id
+local orderId = ARGV[4]
 
 -- key
 -- 库存key
@@ -36,5 +39,7 @@ end
 redis.call('HINCRBY', stockKey, 'stock', -1)
 -- 保存用户下单
 redis.call('SADD', orderKey, userId)
+-- 订单信息发送至stream XADD stream.orders * k1 v1 k2 v2 ...
+redis.call('XADD', 'stream.orders', '*', 'userId', userId, 'voucherId', voucherId, 'id', orderId)
 return 0
 
