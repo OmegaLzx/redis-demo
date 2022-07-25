@@ -2,6 +2,7 @@ package com.hmdp.service.impl;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.constant.RedisScriptConstant;
 import com.hmdp.constant.SystemConstants;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.Blog;
@@ -12,16 +13,16 @@ import com.hmdp.service.IUserService;
 import com.hmdp.utils.UserHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 
 import static com.hmdp.constant.RedisConstants.BLOG_LIKED_KEY;
-import static com.hmdp.constant.RedisConstants.LOCK_LIKED_KEY;
+import static com.hmdp.constant.RedisScriptConstant.LIKE_SCRIPT;
 
 /**
  * <p>
@@ -78,28 +79,51 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
     @Transactional
     public Result likeBlog(Long id) {
         Long userId = UserHolder.getUserId();
-        String key = BLOG_LIKED_KEY + id;
-        String lockKey = LOCK_LIKED_KEY + userId;
-        RLock lock = redissonClient.getLock(lockKey);
+        // 执行lua点赞脚本
+        Long result = redisTemplate.execute(
+                RedisScriptConstant.get(LIKE_SCRIPT),
+                Collections.emptyList(),
+                userId.toString(),
+                id.toString()
+        );
 
-        if (!lock.tryLock()) {
-            return Result.fail("点赞的速度过快，请稍后再试");
+        assert result != null;
+        int r = result.intValue();
+        if (r == 1) {
+            update().setSql("liked = liked - 1").eq("id", id).update();
+        } else {
+            update().setSql("liked = liked + 1").eq("id", id).update();
         }
-
-        try {
-            if (Boolean.FALSE.equals(redisTemplate.opsForSet().isMember(key, userId.toString()))) {
-                if (update().setSql("liked = liked + 1").eq("id", id).update()) {
-                    redisTemplate.opsForSet().add(key, userId.toString());
-                }
-            } else {
-                if (update().setSql("liked = liked - 1").eq("id", id).update()) {
-                    redisTemplate.opsForSet().remove(key, userId.toString());
-                }
-            }
-        } finally {
-            lock.unlock();
-        }
-
         return Result.ok();
     }
+
+
+    //@Override
+    //@Transactional
+    //public Result likeBlog(Long id) {
+    //    Long userId = UserHolder.getUserId();
+    //    String key = BLOG_LIKED_KEY + id;
+    //    String lockKey = LOCK_LIKED_KEY + userId;
+    //    RLock lock = redissonClient.getLock(lockKey);
+    //
+    //    if (!lock.tryLock()) {
+    //        return Result.fail("点赞的速度过快，请稍后再试");
+    //    }
+    //
+    //    try {
+    //        if (Boolean.FALSE.equals(redisTemplate.opsForSet().isMember(key, userId.toString()))) {
+    //            if (update().setSql("liked = liked + 1").eq("id", id).update()) {
+    //                redisTemplate.opsForSet().add(key, userId.toString());
+    //            }
+    //        } else {
+    //            if (update().setSql("liked = liked - 1").eq("id", id).update()) {
+    //                redisTemplate.opsForSet().remove(key, userId.toString());
+    //            }
+    //        }
+    //    } finally {
+    //        lock.unlock();
+    //    }
+    //
+    //    return Result.ok();
+    //}
 }

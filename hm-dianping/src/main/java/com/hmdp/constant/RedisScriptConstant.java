@@ -15,6 +15,7 @@ import static com.hmdp.constant.RedisConstants.SCRIPT_PATH;
 public class RedisScriptConstant {
     public static final String SECKILL_SCRIPT = "seckill.lua";
     public static final String UNLOCK_SCRIPT = "unlock.lua";
+    public static final String LIKE_SCRIPT = "like.lua";
     private static final Map<String, DefaultRedisScript<Long>> REDIS_SCRIPT_MAP = new HashMap<>();
 
     static {
