@@ -1,10 +1,13 @@
 package com.hmdp.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.text.CharSequenceUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.constant.RedisScriptConstant;
 import com.hmdp.constant.SystemConstants;
 import com.hmdp.dto.Result;
+import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Blog;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.BlogMapper;
@@ -20,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.hmdp.constant.RedisConstants.BLOG_LIKED_KEY;
 import static com.hmdp.constant.RedisScriptConstant.LIKE_SCRIPT;
@@ -61,8 +66,8 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
 
         Long currentUserId = UserHolder.getUserId();
         String key = BLOG_LIKED_KEY + blog.getId();
-        Boolean isMember = redisTemplate.opsForSet().isMember(key, currentUserId.toString());
-        blog.setIsLike(Boolean.TRUE.equals(isMember));
+        Double score = redisTemplate.opsForZSet().score(key, currentUserId.toString());
+        blog.setIsLike(score != null);
     }
 
     @Override
@@ -84,7 +89,8 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
                 RedisScriptConstant.get(LIKE_SCRIPT),
                 Collections.emptyList(),
                 userId.toString(),
-                id.toString()
+                id.toString(),
+                String.valueOf(System.currentTimeMillis())
         );
 
         assert result != null;
@@ -95,6 +101,27 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
             update().setSql("liked = liked + 1").eq("id", id).update();
         }
         return Result.ok();
+    }
+
+    @Override
+    public Result queryBlogLikes(Long id) {
+        String key = BLOG_LIKED_KEY + id;
+        Set<String> topFive = redisTemplate.opsForZSet().range(key, 0, 5);
+        if (topFive == null || topFive.isEmpty()) {
+            return Result.ok(Collections.emptyList());
+
+        }
+        List<Long> ids = topFive.stream().map(Long::valueOf).collect(Collectors.toList());
+
+        String idStr = CharSequenceUtil.join(",", ids);
+        List<UserDTO> userDtoList = userService.query()
+                .in("id", ids)
+                .last("ORDER BY FILED(id, " + idStr + ")")
+                .list()
+                .stream()
+                .map(user -> BeanUtil.copyProperties(user, UserDTO.class))
+                .collect(Collectors.toList());
+        return Result.ok(userDtoList);
     }
 
 
