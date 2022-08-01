@@ -2,6 +2,7 @@ package com.hmdp.service.impl;
 
 import com.hmdp.entity.Shop;
 import com.hmdp.utils.RedisHashUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +22,7 @@ import static com.hmdp.constant.RedisConstants.CACHE_SHOP_KEY;
 
 @SpringBootTest
 @RunWith(SpringRunner.class)
+@Slf4j
 public class ShopServiceImplTest {
     @Resource
     private ShopServiceImpl shopService;
@@ -53,7 +55,8 @@ public class ShopServiceImplTest {
             //for (Shop shop : shops) {
             //    redisTemplate.opsForGeo().add(key, new Point(shop.getX(), shop.getY()), shop.getId().toString());
             //}
-            redisTemplate.opsForGeo().add(key, geoLocations);
+            log.info("{} {}", key, geoLocations);
+            //redisTemplate.opsForGeo().add(key, geoLocations);
         }
     }
 }

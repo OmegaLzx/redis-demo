@@ -21,4 +21,12 @@ public interface IUserService extends IService<User> {
     Result me();
 
     Result logout();
+
+    Result sign();
+
+    Result signCount(String date);
+
+    Result uvCount(String end);
+
+    Result pvCount(String end);
 }

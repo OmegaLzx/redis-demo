@@ -20,12 +20,17 @@ public class MvcConfig implements WebMvcConfigurer {
         registry.addInterceptor(new LoginInterceptor())
                 .excludePathPatterns(
                         "/user/login",
-                        "/user/code"
+                        "/user/code",
+                        "/user/uv/*",
+                        "/user/pv/*"
                 )
-                .order(1);
+                .order(2);
 
         registry.addInterceptor(new RefreshTokenInterceptor(constantConfig, stringRedisTemplate))
                 .addPathPatterns("/**").order(0);
+
+        registry.addInterceptor(new UvAndPvInterceptor(stringRedisTemplate))
+                .addPathPatterns("/**").order(1);
 
         WebMvcConfigurer.super.addInterceptors(registry);
     }

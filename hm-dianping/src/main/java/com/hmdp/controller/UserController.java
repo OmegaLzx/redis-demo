@@ -95,5 +95,23 @@ public class UserController {
         return Result.ok(userDTO);
     }
 
+    @PostMapping("sign")
+    public Result sign() {
+        return userService.sign();
+    }
 
+    @GetMapping("sign/count/{date}")
+    public Result signCount(@PathVariable String date) {
+        return userService.signCount(date);
+    }
+
+    @GetMapping("uv/{end}")
+    public Result uvCount(@PathVariable String end) {
+        return userService.uvCount(end);
+    }
+
+    @GetMapping("pv/{end}")
+    public Result pvCount(@PathVariable String end) {
+        return userService.pvCount(end);
+    }
 }

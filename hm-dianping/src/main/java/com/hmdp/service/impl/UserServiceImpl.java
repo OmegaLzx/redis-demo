@@ -15,12 +15,20 @@ import com.hmdp.service.IUserService;
 import com.hmdp.utils.RedisHashUtil;
 import com.hmdp.utils.RegexUtils;
 import com.hmdp.utils.UserHolder;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import static com.hmdp.constant.RedisConstants.USER_SIGN_KEY;
 
 /**
  * <p>
@@ -32,13 +40,12 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
-    @Resource
-    private StringRedisTemplate stringRedisTemplate;
-    @Resource
-    private RedisHashUtil redisHashUtil;
-    @Resource
-    private RedisConstantConfig redisConstant;
+    private final StringRedisTemplate redisTemplate;
+    private final RedisHashUtil redisHashUtil;
+    private final RedisConstantConfig redisConstant;
+
 
     @Override
     public Result sendCode(String phone) {
@@ -50,7 +57,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         String code = RandomUtil.randomNumbers(6);
         log.info("发送手机验证码：{}", code);
         // 将验证码保存在redis中
-        stringRedisTemplate.opsForValue().set(
+        redisTemplate.opsForValue().set(
                 redisConstant.getLoginCodePrefix() + phone, code, redisConstant.getLoginCodeTtl(), TimeUnit.MINUTES);
         return Result.ok();
     }
@@ -83,7 +90,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     private boolean validCode(LoginFormDTO loginFormDTO) {
         // 1. 检查验证码有效性
-        String code = stringRedisTemplate.opsForValue().get(
+        String code = redisTemplate.opsForValue().get(
                 redisConstant.getLoginCodePrefix() + loginFormDTO.getPhone());
         // 2. 验证码无效，返回错误信息
         return code != null && code.equals(loginFormDTO.getCode());
@@ -100,8 +107,72 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     @Override
     public Result logout() {
-        stringRedisTemplate.delete(redisConstant.getUserInfoPrefix() + UserHolder.getToken());
+        redisTemplate.delete(redisConstant.getUserInfoPrefix() + UserHolder.getToken());
         return Result.ok();
     }
+
+    @Override
+    public Result sign() {
+        Long userId = UserHolder.getUserId();
+        LocalDateTime now = LocalDateTime.now();
+        String key = USER_SIGN_KEY + userId + ":" + now.format(DateTimeFormatter.ofPattern("yyyyMM"));
+        int dayOfMonth = now.getDayOfMonth();
+        redisTemplate.opsForValue().setBit(key, dayOfMonth - 1L, true);
+        return Result.ok();
+    }
+
+    @Override
+    public Result signCount(String date) {
+        Long userId = UserHolder.getUserId();
+        //LocalDateTime now = LocalDateTime.now();
+        LocalDate dateTime = LocalDate.parse(date, DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String key = USER_SIGN_KEY + userId + ":" + dateTime.format(DateTimeFormatter.ofPattern("yyyyMM"));
+        int dayOfMonth = dateTime.getDayOfMonth();
+
+        List<Long> result = redisTemplate.opsForValue().bitField(key, BitFieldSubCommands.create()
+                .get(BitFieldSubCommands.BitFieldType.unsigned(dayOfMonth)).valueAt(0)
+        );
+
+        if (result == null || result.isEmpty()) {
+            return Result.ok(0);
+        }
+        Long num = result.get(0);
+        if (num == null || num == 0) {
+            return Result.ok(0);
+        }
+        int count = 0;
+
+        while ((num & 1) != 0) {
+            count++;
+            num >>>= 1;
+        }
+
+        return Result.ok(count);
+    }
+
+    @Override
+    public Result uvCount(String end) {
+        Long size = getHllSize("uv", end);
+        return Result.ok(size);
+    }
+
+    @Override
+    public Result pvCount(String end) {
+        Long size = getHllSize("pv", end);
+        return Result.ok(size);
+    }
+
+    private Long getHllSize(String keyPrefix, String end) {
+        LocalDate dateTime = LocalDate.parse(end, DateTimeFormatter.ofPattern("yyyyMMdd"));
+        LocalDate min = LocalDate.of(2022, 1, 1);
+        List<String> keys = new ArrayList<>();
+        while (dateTime.isAfter(min)) {
+            String key = keyPrefix + ":" + dateTime.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+            keys.add(key);
+            dateTime = dateTime.minusDays(1L);
+        }
+        return redisTemplate.opsForHyperLogLog().size(keys.toArray(new String[0]));
+    }
+
 
 }
