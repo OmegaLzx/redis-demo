@@ -13,6 +13,7 @@
         <module>jedis</module>
         <module>spring-redis</module>
         <module>hm-dianping</module>
+        <module>item-service</module>
     </modules>
 
     <properties>
