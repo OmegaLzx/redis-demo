@@ -27,4 +27,12 @@ public class UserServiceImplTest {
 
     }
 
+    @Test
+    public void addUser2() {
+        User user = new User();
+        user.setPhone(String.valueOf(2222222222L));
+        user.setNickName("user_" + UUID.randomUUID().toString(true).substring(0, 10));
+        userService.save(user);
+    }
+
 }
